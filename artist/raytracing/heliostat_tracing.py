@@ -132,6 +132,7 @@ class HeliostatRayTracer:
     def __init__(
         self,
         scenario: "Scenario",
+        helio_id: int = 0,
         world_size: int = 1,
         rank: int = 0,
         batch_size: int = 1,
@@ -161,7 +162,9 @@ class HeliostatRayTracer:
         shuffle : bool
             A boolean flag indicating whether to shuffle the data (default: False).
         """
-        self.heliostat = scenario.heliostats.heliostat_list[0]
+        self.heliostat = scenario.heliostats.heliostat_list[helio_id]
+        if not(helio_id == 0):
+            print("Using Heliostat %i"%(helio_id))
         self.receiver = scenario.receivers.receiver_list[0]
         self.world_size = world_size
         self.rank = rank
