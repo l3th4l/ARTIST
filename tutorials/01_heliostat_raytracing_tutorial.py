@@ -1,4 +1,5 @@
 import math
+import pathlib
 import subprocess
 from typing import Optional, Union
 
@@ -9,30 +10,35 @@ from matplotlib.pyplot import tight_layout
 
 from artist.raytracing.heliostat_tracing import HeliostatRayTracer
 from artist.scenario import Scenario
+from artist.util import set_logger_config
 
 # If you have already generated the tutorial scenario yourself, you can leave this boolean as False. If not, set it to
 # true and a pre-generated scenario file will be downloaded for this tutorial!
 DOWNLOAD_DATA = False
-scenario_name = "please/insert/the/path/to/the/scenario/here/name.h5"
+scenario_file = pathlib.Path("please/insert/the/path/to/the/scenario/here/name.h5")
 
 if DOWNLOAD_DATA:
-    url = "https://drive.google.com/uc?export=download&id=1WSJyabylkK8cMDgulymVP5nPNGNf_BzN"
+    url = "https://drive.google.com/uc?export=download&id=1X0bMmzwdlnk88bCaYM_sNUGaMxnMaRG8"
     output_filename = "tutorial_scenario.h5"
     command = ["wget", "-O", output_filename, url]
     result = subprocess.run(command, capture_output=True, text=True)
-    scenario_name = output_filename
+    scenario_file = pathlib.Path(output_filename)
 
+# Set up logger.
+set_logger_config()
+
+# Set the device.
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Load the scenario.
-with h5py.File(scenario_name, "r") as f:
+with h5py.File(scenario_file, "r") as f:
     example_scenario = Scenario.load_scenario_from_hdf5(scenario_file=f, device=device)
 
 # Inspect the scenario.
 print(example_scenario)
 print(f"The light source is a {example_scenario.light_sources.light_source_list[0]}")
 print(
-    f"The receiver type is {example_scenario.receivers.receiver_list[0].receiver_type}"
+    f"The first target area is a {example_scenario.target_areas.target_area_list[0].name}."
 )
 single_heliostat = example_scenario.heliostats.heliostat_list[0]
 print(f"The heliostat position is: {single_heliostat.position}")
@@ -78,8 +84,10 @@ for i in range(len(single_heliostat.surface.facets)):
     u_aligned = (
         single_heliostat.current_aligned_surface_points[i, :, 2].cpu().detach().numpy()
     )
-    ax1.scatter(e_origin, n_origin, u_origin, color=colors[i], label=f"Facet {i+1}")
-    ax2.scatter(e_aligned, n_aligned, u_aligned, color=colors[i], label=f"Facet {i+1}")
+    ax1.scatter(e_origin, n_origin, u_origin, color=colors[i], label=f"Facet {i + 1}")
+    ax2.scatter(
+        e_aligned, n_aligned, u_aligned, color=colors[i], label=f"Facet {i + 1}"
+    )
 
 # Add labels.
 ax1.set_xlabel("E")
@@ -105,7 +113,6 @@ ax2.set_zticks([])
 handles, labels = ax1.get_legend_handles_labels()
 fig.legend(handles, labels, loc="upper center", ncols=4)
 
-
 # Show the plot.
 plt.show()
 
@@ -120,7 +127,7 @@ image_south = raytracer.normalize_bitmap(image_south)
 
 # Plot the result.
 fig, ax = plt.subplots(figsize=(6, 6))
-ax.imshow(image_south.T.cpu().detach().numpy(), cmap="inferno")
+ax.imshow(image_south.cpu().detach().numpy(), cmap="inferno")
 tight_layout()
 
 
@@ -184,11 +191,11 @@ def plot_multiple_images(
     # Plot each tensor.
     for i, image in enumerate(image_tensors):
         ax = axes[i]
-        ax.imshow(image.T.cpu().detach().numpy(), cmap="inferno")
+        ax.imshow(image.cpu().detach().numpy(), cmap="inferno")
         if names is not None and i < len(names):
             ax.set_title(names[i])
         else:
-            ax.set_title(f"Untitled Image {i+1}")
+            ax.set_title(f"Untitled Image {i + 1}")
 
     # Hide unused subplots.
     for j in range(i + 1, grid_size * grid_size):

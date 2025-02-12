@@ -252,7 +252,7 @@ class SurfaceConverter:
             scheduler.step(loss.abs().mean())
             if epoch % 100 == 0:
                 log.info(
-                    f"Epoch: {epoch}, Loss: {loss.abs().mean().item()}, LR: {optimizer.param_groups[0]['lr']}",
+                    f"Epoch: {epoch}, Loss: {loss.abs().mean().item()}, LR: {optimizer.param_groups[0]['lr']}.",
                 )
             epoch += 1
 
@@ -339,11 +339,11 @@ class SurfaceConverter:
         )
 
         # Convert to NURBS surface.
-        log.info("Converting to NURBS surface")
+        log.info("Converting to NURBS surface.")
         facet_config_list = []
         for i in range(surface_points_with_facets.shape[0]):
             log.info(
-                f"Converting facet {i+1} of {surface_points_with_facets.shape[0]}."
+                f"Converting facet {i + 1} of {surface_points_with_facets.shape[0]}."
             )
             nurbs_surface = self.fit_nurbs_surface(
                 surface_points=surface_points_with_facets[i],
@@ -360,7 +360,7 @@ class SurfaceConverter:
             )
             facet_config_list.append(
                 FacetConfig(
-                    facet_key=f"facet_{i+1}",
+                    facet_key=f"facet_{i + 1}",
                     control_points=nurbs_surface.control_points.detach(),
                     degree_e=nurbs_surface.degree_e,
                     degree_n=nurbs_surface.degree_n,
@@ -451,7 +451,7 @@ class SurfaceConverter:
                 surface_points_with_facets_list.append(single_facet_surface_points)
                 surface_normals_with_facets_list.append(single_facet_surface_normals)
 
-        log.info("Loading ``STRAL`` data complete")
+        log.info("Loading ``STRAL`` data complete.")
 
         surface_config = self._generate_surface_config(
             surface_points_with_facets_list=surface_points_with_facets_list,
@@ -521,14 +521,14 @@ class SurfaceConverter:
 
         # Reading ``PAINT`` deflectometry hdf5 file.
         log.info(
-            f"Reading PAINT deflectometry file located at: {deflectometry_file_path}"
+            f"Reading PAINT deflectometry file located at: {deflectometry_file_path}."
         )
         with h5py.File(deflectometry_file_path, "r") as file:
             surface_points_with_facets_list = []
             surface_normals_with_facets_list = []
             for f in range(number_of_facets):
                 number_of_points = len(
-                    file[f"{config_dictionary.paint_facet}{f+1}"][
+                    file[f"{config_dictionary.paint_facet}{f + 1}"][
                         config_dictionary.paint_surface_points
                     ]
                 )
@@ -541,7 +541,7 @@ class SurfaceConverter:
 
                 points_data = torch.tensor(
                     np.array(
-                        file[f"{config_dictionary.paint_facet}{f+1}"][
+                        file[f"{config_dictionary.paint_facet}{f + 1}"][
                             config_dictionary.paint_surface_points
                         ]
                     ),
@@ -549,7 +549,7 @@ class SurfaceConverter:
                 )
                 normals_data = torch.tensor(
                     np.array(
-                        file[f"{config_dictionary.paint_facet}{f+1}"][
+                        file[f"{config_dictionary.paint_facet}{f + 1}"][
                             config_dictionary.paint_surface_normals
                         ]
                     ),
@@ -563,7 +563,7 @@ class SurfaceConverter:
                 surface_points_with_facets_list.append(single_facet_surface_points)
                 surface_normals_with_facets_list.append(single_facet_surface_normals)
 
-        log.info("Loading ``PAINT`` data complete")
+        log.info("Loading ``PAINT`` data complete.")
 
         surface_config = self._generate_surface_config(
             surface_points_with_facets_list=surface_points_with_facets_list,
