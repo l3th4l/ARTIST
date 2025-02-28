@@ -269,13 +269,16 @@ def azimuth_elevation_to_enu(
     if degree:
         elevation = torch.deg2rad(elevation)
         azimuth = torch.deg2rad(azimuth)
+    
+    if azimuth < 0.0:
+        azimuth += (torch.pi * 2)
 
     r = slant_range * torch.cos(elevation)
 
     enu = torch.stack(
         [
             r * torch.sin(azimuth),
-            -r * torch.cos(azimuth),
+            r * torch.cos(azimuth),
             slant_range * torch.sin(elevation),
         ],
         dim=0,
