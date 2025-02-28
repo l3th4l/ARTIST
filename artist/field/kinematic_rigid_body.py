@@ -303,6 +303,176 @@ class RigidBody(Kinematic):
             )
         )
 
+    def incident_ray_direction_to_motor_positions(
+        self,
+        incident_ray_direction: torch.Tensor,
+        max_num_iterations: int = 2,
+        min_eps: float = 0.0001,
+        device: Union[torch.device, str] = "cuda",
+    ) -> torch.Tensor:
+        """
+        Compute the orientation matrix given an incident ray direction.
+
+        Parameters
+        ----------
+        incident_ray_direction : torch.Tensor
+            The direction of the incident ray as seen from the heliostat.
+        max_num_iterations : int
+            Maximum number of iterations (default: 2).
+        min_eps : float
+            Convergence criterion (default: 0.0001).
+        device : Union[torch.device, str]
+            The device on which to initialize tensors (default is cuda).
+
+        Returns
+        -------
+        torch.Tensor
+            The orientation matrix.
+        """
+        if len(self.actuators.actuator_list) != 2:
+            raise ValueError(
+                f"The rigid body kinematic requires exactly two actuators but {len(self.actuators.actuator_list)} were specified, please check the configuration!"
+            )
+
+        device = torch.device(device)
+        motor_positions = torch.zeros(2, device=device)
+        last_iteration_loss = None
+        for _ in range(max_num_iterations):
+            joint_1_angle = self.actuators.actuator_list[0].motor_position_to_angle(
+                motor_position=motor_positions[0], device=device
+            )
+            joint_2_angle = self.actuators.actuator_list[1].motor_position_to_angle(
+                motor_position=motor_positions[1], device=device
+            )
+
+            initial_orientation = torch.eye(4, device=device)
+
+            # Account for position.
+            initial_orientation = initial_orientation @ utils.translate_enu(
+                e=self.position[0],
+                n=self.position[1],
+                u=self.position[2],
+                device=device,
+            )
+
+            joint_1_rotation = (
+                utils.rotate_n(
+                    n=self.deviation_parameters.first_joint_tilt_n, device=device
+                )
+                @ utils.rotate_u(
+                    u=self.deviation_parameters.first_joint_tilt_u, device=device
+                )
+                @ utils.translate_enu(
+                    e=self.deviation_parameters.first_joint_translation_e,
+                    n=self.deviation_parameters.first_joint_translation_n,
+                    u=self.deviation_parameters.first_joint_translation_u,
+                    device=device,
+                )
+                @ utils.rotate_e(joint_1_angle, device=device)
+            )
+            joint_2_rotation = (
+                utils.rotate_e(
+                    e=self.deviation_parameters.second_joint_tilt_e, device=device
+                )
+                @ utils.rotate_n(
+                    n=self.deviation_parameters.second_joint_tilt_n, device=device
+                )
+                @ utils.translate_enu(
+                    e=self.deviation_parameters.second_joint_translation_e,
+                    n=self.deviation_parameters.second_joint_translation_n,
+                    u=self.deviation_parameters.second_joint_translation_u,
+                    device=device,
+                )
+                @ utils.rotate_u(joint_2_angle, device=device)
+            )
+
+            orientation = (
+                initial_orientation
+                @ joint_1_rotation
+                @ joint_2_rotation
+                @ utils.translate_enu(
+                    e=self.deviation_parameters.concentrator_translation_e,
+                    n=self.deviation_parameters.concentrator_translation_n,
+                    u=self.deviation_parameters.concentrator_translation_u,
+                    device=device,
+                )
+            )
+
+            concentrator_normal = orientation @ torch.tensor(
+                [0, -1, 0, 0], dtype=torch.float32, device=device
+            )
+            concentrator_origin = orientation @ torch.tensor(
+                [0, 0, 0, 1], dtype=torch.float32, device=device
+            )
+
+            # Compute desired normal.
+            desired_reflect_vec = self.aim_point - concentrator_origin
+            desired_reflect_vec = desired_reflect_vec / desired_reflect_vec.norm()
+            incident_ray_direction = (
+                incident_ray_direction / incident_ray_direction.norm()
+            )
+            desired_concentrator_normal = - incident_ray_direction + desired_reflect_vec
+            desired_concentrator_normal = (
+                desired_concentrator_normal / desired_concentrator_normal.norm()
+            )
+
+            # Compute epoch loss.
+            loss = torch.abs(desired_concentrator_normal - concentrator_normal)
+
+            # Stop if converged.
+            if isinstance(last_iteration_loss, torch.Tensor):
+                eps = torch.abs(last_iteration_loss - loss)
+                if torch.any(eps <= min_eps):
+                    break
+            last_iteration_loss = loss.detach()
+
+            # Analytical Solution
+
+            # Calculate joint 2 angle.
+            joint_2_angle = -torch.arcsin(
+                -desired_concentrator_normal[0]
+                / torch.cos(self.deviation_parameters.second_joint_translation_n)
+            )
+
+            # Calculate joint 1 angle.
+            a = -torch.cos(
+                self.deviation_parameters.second_joint_translation_e
+            ) * torch.cos(joint_2_angle) + torch.sin(
+                self.deviation_parameters.second_joint_translation_e
+            ) * torch.sin(
+                self.deviation_parameters.second_joint_translation_n
+            ) * torch.sin(joint_2_angle)
+            b = -torch.sin(
+                self.deviation_parameters.second_joint_translation_e
+            ) * torch.cos(joint_2_angle) - torch.cos(
+                self.deviation_parameters.second_joint_translation_e
+            ) * torch.sin(
+                self.deviation_parameters.second_joint_translation_n
+            ) * torch.sin(joint_2_angle)
+
+            joint_1_angle = (
+                torch.arctan2(
+                    a * -desired_concentrator_normal[2]
+                    - b * -desired_concentrator_normal[1],
+                    a * -desired_concentrator_normal[1]
+                    + b * -desired_concentrator_normal[2],
+                )
+                - torch.pi
+            )
+
+            motor_positions = torch.stack(
+                (
+                    self.actuators.actuator_list[0].angle_to_motor_position(
+                        joint_1_angle, device
+                    ),
+                    self.actuators.actuator_list[1].angle_to_motor_position(
+                        joint_2_angle, device
+                    ),
+                ),
+            )
+
+        return motor_positions
+
     def align_surface_with_incident_ray_direction(
         self,
         incident_ray_direction: torch.Tensor,
